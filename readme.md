@@ -1,2 +1,3 @@
 # Project Euler
-My Project Euler solutions.
+Bit of fun to tinker with. No best practices, just charging along.
+
