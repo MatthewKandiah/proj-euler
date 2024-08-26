@@ -11,4 +11,6 @@ pub fn main() !void {
     while (try in_stream.readUntilDelimiterOrEof(&read_buf, '\n')) |line| {
         std.debug.print("{s}\n", .{line});
     }
+
+    @panic("Seems like a boring problem, skipping for now");
 }
