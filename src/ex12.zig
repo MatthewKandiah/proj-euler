@@ -4,26 +4,89 @@ const target = 500;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var triangle_numbers = std.ArrayList(usize).init(allocator);
-    try triangle_numbers.append(1);
-    var biggest_result_so_far: usize = 1;
-    var divisor_count: usize = 1;
-    while (divisor_count <= target) {
-        try appendNextTriangleNumber(&triangle_numbers);
-        divisor_count = countDivisors(triangle_numbers.getLast());
-        if (divisor_count > biggest_result_so_far) {
-            biggest_result_so_far = divisor_count;
-            std.debug.print("New best! {}. {} divisors\n", .{ triangle_numbers.getLast(), biggest_result_so_far });
-        }
+    var generator: TriangleNumberGenerator = .{
+        .triangle_number = 1,
+        .increment = 2,
+    };
+
+    var worker_context: WorkerContext = .{
+        .mutex = .{},
+        .generator = &generator,
+        .result = null,
+        .target = target,
+    };
+
+    const thread_count = try std.Thread.getCpuCount();
+    var threads = try allocator.alloc(std.Thread, thread_count);
+    defer allocator.free(threads);
+    for (0..thread_count) |i| {
+        threads[i] = try std.Thread.spawn(
+            .{ .allocator = allocator },
+            worker,
+            .{&worker_context},
+        );
     }
-    std.debug.print("{}\n", .{triangle_numbers.getLast()});
+
+    for (threads) |thread| {
+        thread.join();
+    }
+
+    std.debug.print("{}\n", .{worker_context.result.?});
 }
 
-fn appendNextTriangleNumber(triangle_numbers: *std.ArrayList(usize)) !void {
-    try triangle_numbers.append(triangle_numbers.getLast() + triangle_numbers.items.len + 1);
+fn worker(context: *WorkerContext) void {
+    while (!context.isFinished()) {
+        const candidate = context.next();
+        const divisor_count = countDivisors(candidate);
+        if (divisor_count > context.target) {
+            context.updateResult(candidate);
+        }
+    }
 }
+
+const WorkerContext = struct {
+    mutex: std.Thread.Mutex,
+    generator: *TriangleNumberGenerator,
+    result: ?usize,
+    target: usize,
+
+    const Self = @This();
+
+    pub fn isFinished(self: Self) bool {
+        return self.result != null;
+    }
+
+    pub fn updateResult(self: *Self, x: usize) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
+        self.result = @max(self.result orelse 0, x);
+    }
+
+    pub fn next(self: *Self) usize {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
+        return self.generator.next();
+    }
+};
+
+const TriangleNumberGenerator = struct {
+    triangle_number: usize,
+    increment: usize,
+
+    const Self = @This();
+
+    pub fn next(self: *Self) usize {
+        const result = self.triangle_number;
+        self.triangle_number += self.increment;
+        self.increment += 1;
+        return result;
+    }
+};
 
 fn countDivisors(n: usize) usize {
     std.debug.assert(n != 0);
