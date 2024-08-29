@@ -3,6 +3,8 @@ const std = @import("std");
 const target = 500;
 
 pub fn main() !void {
+    const start_time = std.time.milliTimestamp();
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
@@ -34,6 +36,8 @@ pub fn main() !void {
         thread.join();
     }
 
+    const finish_time = std.time.milliTimestamp();
+    std.debug.print("Run time = {}ms\n", .{finish_time - start_time});
     std.debug.print("{}\n", .{worker_context.result.?});
 }
 
