@@ -112,3 +112,41 @@ fn countDivisors(n: usize) usize {
         }
     }
 }
+
+test "should get correct answer - multithreaded" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var generator: TriangleNumberGenerator = .{
+        .triangle_number = 1,
+        .increment = 2,
+    };
+
+    var worker_context: WorkerContext = .{
+        .mutex = .{},
+        .generator = &generator,
+        .result = null,
+        .target = target,
+    };
+
+    const thread_count = try std.Thread.getCpuCount();
+    var threads = try allocator.alloc(std.Thread, thread_count);
+    defer allocator.free(threads);
+    for (0..thread_count) |i| {
+        threads[i] = try std.Thread.spawn(
+            .{ .allocator = allocator },
+            worker,
+            .{&worker_context},
+        );
+    }
+
+    for (threads) |thread| {
+        thread.join();
+    }
+
+    try std.testing.expectEqual(
+        worker_context.result,
+        76576500,
+    );
+}
