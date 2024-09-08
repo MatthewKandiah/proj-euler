@@ -177,11 +177,25 @@ pub fn main() void {
             }
         }
     }
-    // check known values for 6 sided dice
-    std.debug.print("jail: {}\n", .{space_probabilities[@intFromEnum(BoardSpace.jail)]}); // expected 0.0624
-    std.debug.print("e3: {}\n", .{space_probabilities[@intFromEnum(BoardSpace.e3)]}); // expected 0.0318
-    std.debug.print("jail: {}\n", .{space_probabilities[@intFromEnum(BoardSpace.jail)]}); // expected 0.0309
-    std.debug.print("g2j: {}\n", .{space_probabilities[@intFromEnum(BoardSpace.g2j)]}); // expected 0
+
+    var biggest_index: usize = 0;
+    var second_biggest_index: usize = 0;
+    var third_biggest_index: usize = 0;
+
+    for (0..space_probabilities.len) |i| {
+        if (space_probabilities[i] > space_probabilities[biggest_index]) {
+            third_biggest_index = second_biggest_index;
+            second_biggest_index = biggest_index;
+            biggest_index = i;
+        } else if (space_probabilities[i] > space_probabilities[second_biggest_index]) {
+            third_biggest_index = second_biggest_index;
+            second_biggest_index = i;
+        } else if (space_probabilities[i] > space_probabilities[third_biggest_index]) {
+            third_biggest_index = i;
+        }
+    }
+
+    std.debug.print("{}, {}, {}\n", .{ biggest_index, second_biggest_index, third_biggest_index });
 }
 
 pub fn probabilitiesConverged(probs1: [num_spaces]f32, probs2: [num_spaces]f32, tolerance: f32) bool {
