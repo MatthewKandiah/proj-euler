@@ -70,8 +70,10 @@ const MonopolyContext = struct {
     current_space: BoardSpace,
     doubles_rolled: u32,
     rng: *std.rand.Xoshiro256,
-    community_cards_drawn: u32,
-    chance_cards_drawn: u32,
+    community_cards_drawn: usize,
+    chance_cards_drawn: usize,
+    community_cards: [16]u32,
+    chance_cards: [16]u32,
 
     const Self = @This();
 
@@ -85,6 +87,8 @@ const MonopolyContext = struct {
             .rng = rng,
             .community_cards_drawn = 0,
             .chance_cards_drawn = 0,
+            .community_cards = .{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 },
+            .chance_cards = .{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 },
         };
     }
 
@@ -107,9 +111,8 @@ const MonopolyContext = struct {
         }
     }
 
-    // assuming order of the cards won't affect probabilities of spaces over large enough sample size
     fn handleCommunityChest(self: *Self, space: BoardSpace) void {
-        self.goToSpace(switch (self.community_cards_drawn) {
+        self.goToSpace(switch (self.community_cards[self.community_cards_drawn]) {
             0 => .go,
             1 => .jail,
             2...15 => space,
@@ -119,9 +122,8 @@ const MonopolyContext = struct {
         self.community_cards_drawn %= 16;
     }
 
-    // assuming order of the cards won't affect probabilities of spaces over large enough sample size
     fn handleChance(self: *Self, space: BoardSpace) void {
-        self.goToSpace(switch (self.chance_cards_drawn) {
+        self.goToSpace(switch (self.chance_cards[self.chance_cards_drawn]) {
             0 => .go,
             1 => .jail,
             2 => .c1,
@@ -154,11 +156,30 @@ const MonopolyContext = struct {
         }
         return result;
     }
+
+    fn shuffle_decks(self: *Self) void {
+        var temp: u32 = undefined;
+        // shuffle community deck
+        for (0..16) |i| {
+            const shuf = self.rng.next() % 16;
+            temp = self.community_cards[shuf];
+            self.community_cards[shuf] = self.community_cards[i];
+            self.community_cards[i] = temp;
+        }
+        // shuffle chance deck
+        for (0..16) |i| {
+            const shuf = self.rng.next() % 16;
+            temp = self.chance_cards[shuf];
+            self.chance_cards[shuf] = self.chance_cards[i];
+            self.chance_cards[i] = temp;
+        }
+    }
 };
 
 pub fn main() void {
     var rng = std.rand.DefaultPrng.init(42);
     var context = MonopolyContext.init(&rng);
+    context.shuffle_decks();
 
     var finished = false;
     var count: u32 = 0;
@@ -195,7 +216,7 @@ pub fn main() void {
         }
     }
 
-    std.debug.print("{}, {}, {}\n", .{ biggest_index, second_biggest_index, third_biggest_index });
+    std.debug.print("{}, {}, {}\n", .{ biggest_index, second_biggest_index, third_biggest_index }); // 6-sided, expecting 10, 24, 00
 }
 
 pub fn probabilitiesConverged(probs1: [num_spaces]f32, probs2: [num_spaces]f32, tolerance: f32) bool {
