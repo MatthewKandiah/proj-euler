@@ -2,7 +2,7 @@ const std = @import("std");
 
 const num_spaces = 40;
 const dice_sides = 6;
-const convergence_tolerance = 0.000_001;
+const convergence_tolerance = 0.001;
 
 const BoardSpace = enum(usize) {
     go = 0,
@@ -70,6 +70,8 @@ const MonopolyContext = struct {
     current_space: BoardSpace,
     doubles_rolled: u32,
     rng: *std.rand.Xoshiro256,
+    community_cards_drawn: u32,
+    chance_cards_drawn: u32,
 
     const Self = @This();
 
@@ -81,6 +83,8 @@ const MonopolyContext = struct {
             .current_space = .go,
             .doubles_rolled = 0,
             .rng = rng,
+            .community_cards_drawn = 0,
+            .chance_cards_drawn = 0,
         };
     }
 
@@ -103,29 +107,35 @@ const MonopolyContext = struct {
         }
     }
 
+    // assuming order of the cards won't affect probabilities of spaces over large enough sample size
     fn handleCommunityChest(self: *Self, space: BoardSpace) void {
-        self.goToSpace(switch (self.rollDice(16)) {
-            1 => .go,
-            2 => .jail,
-            3...16 => space,
+        self.goToSpace(switch (self.community_cards_drawn) {
+            0 => .go,
+            1 => .jail,
+            2...15 => space,
             else => unreachable,
         });
+        self.community_cards_drawn += 1;
+        self.community_cards_drawn %= 16;
     }
 
+    // assuming order of the cards won't affect probabilities of spaces over large enough sample size
     fn handleChance(self: *Self, space: BoardSpace) void {
-        self.goToSpace(switch (self.rollDice(16)) {
-            1 => .go,
-            2 => .jail,
-            3 => .c1,
-            4 => .e3,
-            5 => .h2,
-            6 => .r1,
-            7, 8 => space.nextRail(),
-            9 => space.nextUtility(),
-            10 => @enumFromInt(@intFromEnum(space) - 3),
-            11...16 => space,
+        self.goToSpace(switch (self.chance_cards_drawn) {
+            0 => .go,
+            1 => .jail,
+            2 => .c1,
+            3 => .e3,
+            4 => .h2,
+            5 => .r1,
+            6, 7 => space.nextRail(),
+            8 => space.nextUtility(),
+            9 => @enumFromInt(@intFromEnum(space) - 3),
+            10...15 => space,
             else => unreachable,
         });
+        self.chance_cards_drawn += 1;
+        self.chance_cards_drawn %= 16;
     }
 
     fn goToSpace(self: *Self, space: BoardSpace) void {
