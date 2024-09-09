@@ -2,7 +2,7 @@ const std = @import("std");
 
 const num_spaces = 40;
 const dice_sides = 6;
-const convergence_tolerance = 0.001;
+const convergence_tolerance = 0.000_001;
 
 const BoardSpace = enum(usize) {
     go = 0,
@@ -132,7 +132,7 @@ const MonopolyContext = struct {
             5 => .r1,
             6, 7 => space.nextRail(),
             8 => space.nextUtility(),
-            9 => @enumFromInt(@intFromEnum(space) - 3),
+            9 => @enumFromInt(@intFromEnum(space) - 3), // safe because no chance spaces within 3 of start of board
             10...15 => space,
             else => unreachable,
         });
@@ -149,7 +149,7 @@ const MonopolyContext = struct {
         return @intCast(self.rng.next() % sides + 1);
     }
 
-    fn getSpaceProbabilities(self: Self, count: u32) [num_spaces]f32 {
+    fn getSpaceProbabilities(self: Self, count: u64) [num_spaces]f32 {
         var result: [num_spaces]f32 = undefined;
         for (0..num_spaces) |i| {
             result[i] = @as(f32, @floatFromInt(self.num_visits[i])) / @as(f32, @floatFromInt(count));
@@ -157,7 +157,7 @@ const MonopolyContext = struct {
         return result;
     }
 
-    fn shuffle_decks(self: *Self) void {
+    fn shuffleDecks(self: *Self) void {
         var temp: u32 = undefined;
         // shuffle community deck
         for (0..16) |i| {
@@ -177,12 +177,13 @@ const MonopolyContext = struct {
 };
 
 pub fn main() void {
-    var rng = std.rand.DefaultPrng.init(42);
+    const seed = std.time.milliTimestamp();
+    var rng = std.rand.DefaultPrng.init(@intCast(seed));
     var context = MonopolyContext.init(&rng);
-    context.shuffle_decks();
+    context.shuffleDecks();
 
     var finished = false;
-    var count: u32 = 0;
+    var count: u64 = 0;
     const runs_between_checks = 1_000_000;
     var space_probabilities: [num_spaces]f32 = .{0} ** num_spaces;
     while (!finished) : (count += 1) {
@@ -217,13 +218,26 @@ pub fn main() void {
     }
 
     std.debug.print("{}, {}, {}\n", .{ biggest_index, second_biggest_index, third_biggest_index }); // 6-sided, expecting 10, 24, 00
+    // check space names match up to expected numbers
+    std.debug.print("JAIL = {}\n", .{@intFromEnum(BoardSpace.jail)});
+    std.debug.print("GO = {}\n", .{@intFromEnum(BoardSpace.go)});
+    std.debug.print("E3 = {}\n", .{@intFromEnum(BoardSpace.e3)});
 }
 
 pub fn probabilitiesConverged(probs1: [num_spaces]f32, probs2: [num_spaces]f32, tolerance: f32) bool {
-    for (probs1, probs2) |x, y| {
-        if (@abs(x - y) > tolerance) {
-            return false;
+    var deltas: [num_spaces]f32 = undefined;
+    for (probs1, probs2, 0..) |x, y, i| {
+        deltas[i] = @abs(x - y);
+    }
+
+    var max_delta: f32 = 0;
+    for (deltas) |delta| {
+        if (delta > max_delta) {
+            max_delta = delta;
         }
     }
-    return true;
+
+    // std.debug.print("max_delta: {}\n", .{max_delta});
+
+    return max_delta < tolerance;
 }
